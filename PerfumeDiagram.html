@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Icicle Diagram with Tooltips</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 2rem;
+            background-color: #ffffff;
+            font-family: monospace;
+            text-transform: uppercase;
+            font-size: 18px;
+        }
+
+        svg#icicleChart {
+            display: block;
+            width: 100%;
+            background: #ffffff;
+        }
+
+        rect.node {
+            fill: #ffffff;
+            stroke: #000000;
+            stroke-width: 1px;
+            cursor: pointer;
+        }
+
+        text.label {
+            font-size: 18px;
+            font-family: monospace;
+            fill: #000000;
+            pointer-events: none;
+            text-transform: uppercase;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .peek-disabled {
+            pointer-events: none;
+        }
+
+        .ui-tooltip.custom-tooltip {
+            background: #ffffff !important;
+            border: 1px solid #000000 !important;
+            padding: 8px !important;
+            font-size: 18px !important;
+            color: #000000 !important;
+            box-shadow: -1px 5px 13px 0px rgba(0, 0, 0, 0.21);
+            text-transform: uppercase;
+            font-family: monospace;
+            border-radius: 0;
+        }
+
+        .custom-tooltip .ui-tooltip-content {
+            background: transparent !important;
+            padding: 0 !important;
+            border: none !important;
+        }
+
+        #toggleAllButton {
+
+            cursor: pointer;
+            padding: 8px 16px;
+            margin-bottom: 12px;
+            background-color: #ffffff;
+            border: 1px solid #000000;
+            font-family: monospace;
+            font-size: 18px;
+            text-transform: uppercase;
+            display: inline-block;
+            border-bottom: none;
+            width: calc(100% - 2rem);
+        }
+
+        #toggleAllButton:hover {
+            color: #2d2d2d;
+        }
+
+        h1 {
+            font-size: 27px;
+            /* 1.5 * 18px */
+            margin-bottom: 12px;
+            font-family: monospace;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="toggleAllButton">/ All Ingredeients { expand }</div>
+    <svg id="icicleChart"></svg>
+
+    <script>
+        // Configuration
+        const GOOGLE_SHEETS_API_KEY = 'AIzaSyBKYfT1ajYbTj2sw0udmx55vRtaQg0tTy8';
+        const SPREADSHEET_ID = '16avBJTZsmEC5DBOuJi2o3_xcWQYfkadIFhCZdDvrcjU';
+        const HIERARCHY_RANGE = 'Sheet1!A1:D100';
+        const TOOLTIP_RANGE = 'Sheet1!E1:E100';
+        const CONFIG = {
+            VIEWBOX_WIDTH: 2400,
+            ROW_GAP: 0,
+            LABEL_FONT_SIZE: 18,
+            ANIMATION_DURATION: 300,
+            PEEK_HEIGHT_RATIO: 0.2,
+            EASING_FUNC: d3.easeCubicInOut
+        };
+
+        // Global variables
+        let rootData, groups, barHeight, svg, rootNode;
+
+        $(function () {
+            initializeTooltips();
+            loadHierarchyData();
+            document.getElementById('toggleAllButton').addEventListener('click', toggleAllNodes);
+        });
+
+        function toggleAllNodes() {
+            const button = document.getElementById('toggleAllButton');
+            const shouldExpand = button.textContent === '/ All Ingredeients { expand }';
+            button.textContent = shouldExpand ? '/ All Ingredeients { collapse }' : '/ All Ingredeients { expand }';
+
+            function updateNodeState(node, state) {
+                node.expanded = state;
+                if (node.children) node.children.forEach(child => updateNodeState(child, state));
+            }
+            updateNodeState(rootData, shouldExpand);
+
+            const allNodes = groups.data().filter(node => node.depth > 0);
+            const maxDepth = d3.max(allNodes, node => node.depth);
+
+            if (shouldExpand) {
+                groups.filter(node => node.depth > 1)
+                    .classed('hidden', false)
+                    .select('rect')
+                    .classed('peek-disabled', false)
+                    .attr('height', 0);
+
+                for (let depth = 2; depth <= maxDepth; depth++) {
+                    const delayTime = (depth - 2) * CONFIG.ANIMATION_DURATION;
+
+                    groups.filter(node => node.depth === depth)
+                        .select('rect')
+                        .transition()
+                        .delay(delayTime)
+                        .duration(CONFIG.ANIMATION_DURATION)
+                        .ease(CONFIG.EASING_FUNC)
+                        .attr('height', barHeight);
+
+                    groups.filter(node => node.depth === depth)
+                        .select('text')
+                        .transition()
+                        .delay(delayTime + CONFIG.ANIMATION_DURATION / 2)
+                        .duration(CONFIG.ANIMATION_DURATION)
+                        .ease(CONFIG.EASING_FUNC)
+                        .style('opacity', 1);
+                }
+            } else {
+                for (let depth = maxDepth; depth >= 2; depth--) {
+                    const delayTime = (maxDepth - depth) * CONFIG.ANIMATION_DURATION;
+
+                    groups.filter(node => node.depth === depth)
+                        .select('rect')
+                        .transition()
+                        .delay(delayTime)
+                        .duration(CONFIG.ANIMATION_DURATION)
+                        .ease(CONFIG.EASING_FUNC)
+                        .attr('height', 0);
+
+                    groups.filter(node => node.depth === depth)
+                        .select('text')
+                        .transition()
+                        .delay(delayTime)
+                        .duration(CONFIG.ANIMATION_DURATION)
+                        .ease(CONFIG.EASING_FUNC)
+                        .style('opacity', 0);
+
+                    groups.filter(node => node.depth === depth)
+                        .transition()
+                        .delay(delayTime + CONFIG.ANIMATION_DURATION)
+                        .ease(CONFIG.EASING_FUNC)
+                        .on('end', function () {
+                            d3.select(this).classed('hidden', true);
+                        });
+                }
+            }
+        }
+
+        function initializeTooltips() {
+            $(document).tooltip({
+                items: 'rect.node[data-tooltip!=""]',
+                content: function () { return $(this).attr('data-tooltip'); },
+                tooltipClass: 'custom-tooltip',
+                track: true,
+                show: null,
+                hide: null
+            });
+        }
+
+        function loadHierarchyData() {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${HIERARCHY_RANGE}?key=${GOOGLE_SHEETS_API_KEY}`;
+            $.get(url)
+                .done(function (response) { fetchTooltipData(response.values); })
+                .fail(function (error) { console.error('Error loading hierarchy data:', error); });
+        }
+
+        function fetchTooltipData(rows) {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${TOOLTIP_RANGE}?key=${GOOGLE_SHEETS_API_KEY}`;
+            $.get(url)
+                .done(function (response) {
+                    rootData = buildNestedHierarchy(rows, response.values);
+                    renderIcicleChart(rootData);
+                })
+                .fail(function (error) { console.error('Error loading tooltip data:', error); });
+        }
+
+        function buildNestedHierarchy(dataRows, tooltipRows) {
+            const root = { name: 'root', children: [], expanded: false, peeked: false, tooltip: '' };
+            for (let i = 1; i < dataRows.length; i++) {
+                const row = dataRows[i];
+                const tooltipText = (tooltipRows[i] && tooltipRows[i][0]) || '';
+                let parentNode = root;
+                row.forEach(function (cellValue, columnIndex) {
+                    let childNode = findChildNodeByName(parentNode.children, cellValue);
+                    if (!childNode) {
+                        childNode = { name: cellValue, children: [], expanded: false, peeked: false, tooltip: '' };
+                        if (columnIndex === row.length - 1) childNode.tooltip = tooltipText;
+                        parentNode.children.push(childNode);
+                    }
+                    parentNode = childNode;
+                });
+            }
+            return root;
+        }
+
+        function findChildNodeByName(nodeList, name) {
+            for (let i = 0; i < nodeList.length; i++) {
+                if (nodeList[i].name === name) return nodeList[i];
+            }
+            return null;
+        }
+
+        function renderIcicleChart(rootData) {
+            rootNode = d3.hierarchy(rootData).sum(function (d) { return d.children.length === 0 ? 1 : 0; });
+            d3.partition().size([CONFIG.VIEWBOX_WIDTH, 1])(rootNode);
+            const nodes = rootNode.descendants().filter(function (node) { return node.depth > 0; });
+
+            const canvas = document.createElement('canvas');
+            const context2d = canvas.getContext('2d');
+            context2d.font = `${CONFIG.LABEL_FONT_SIZE}px monospace`;
+            const maxTextWidth = d3.max(nodes, function (node) {
+                return context2d.measureText(node.data.name + ' ' + node.value).width;
+            });
+
+            barHeight = maxTextWidth + 2 * CONFIG.LABEL_FONT_SIZE;
+            const rowHeight = barHeight + CONFIG.ROW_GAP;
+            const maxDepth = d3.max(nodes, function (node) { return node.depth; });
+            const yOffsetMap = {};
+            for (let depth = 1; depth <= maxDepth; depth++) {
+                yOffsetMap[depth] = (depth - 1) * rowHeight + CONFIG.ROW_GAP;
+            }
+
+            const totalHeight = yOffsetMap[maxDepth] + barHeight + CONFIG.ROW_GAP;
+            svg = d3.select('#icicleChart')
+                .attr('viewBox', `0 0 ${CONFIG.VIEWBOX_WIDTH} ${totalHeight}`)
+                .attr('preserveAspectRatio', 'xMinYMin meet');
+
+            groups = svg.selectAll('g.node-group')
+                .data(nodes)
+                .enter()
+                .append('g')
+                .attr('class', 'node-group')
+                .attr('transform', function (d) { return `translate(${d.x0},${yOffsetMap[d.depth]})`; })
+                .classed('hidden', function (d) { return d.depth !== 1; });
+
+            groups.append('rect')
+                .attr('class', 'node')
+                .attr('width', function (d) { return d.x1 - d.x0; })
+                .attr('height', barHeight)
+                .attr('data-tooltip', function (d) { return d.data.tooltip || ''; })
+                .on('mouseover', handleMouseOver)
+                .on('mouseout', handleMouseOut)
+                .on('click', handleClick);
+
+            groups.append('text')
+                .attr('class', 'label')
+                .attr('transform', `translate(${CONFIG.LABEL_FONT_SIZE},${CONFIG.LABEL_FONT_SIZE}) rotate(90)`)
+                .style('opacity', function (d) { return d.depth === 1 ? 1 : 0; })
+                .each(function (d) {
+                    const textEl = d3.select(this);
+                    textEl.append('tspan').text(' / ' + d.data.name);
+                    if (d.depth < maxDepth) textEl.append('tspan').attr('fill-opacity', 1).text(' ' + ' { ' + d.value + ' } ');
+                });
+
+            function handleMouseOver(event, d) {
+                if (d.data.expanded || d.data.peeked) return;
+                const childGroups = groups.filter(function (child) {
+                    return child.parent === d && d3.select(this).classed('hidden');
+                });
+                if (childGroups.empty()) return;
+                d.data.peeked = true;
+                childGroups.classed('hidden', false)
+                    .select('rect')
+                    .classed('peek-disabled', true)
+                    .attr('height', 0)
+                    .transition()
+                    .duration(CONFIG.ANIMATION_DURATION / 2)
+                    .ease(CONFIG.EASING_FUNC)
+                    .attr('height', barHeight * CONFIG.PEEK_HEIGHT_RATIO);
+            }
+
+            function handleMouseOut(event, d) {
+                if (d.data.expanded || !d.data.peeked) return;
+                const childGroups = groups.filter(function (child) { return child.parent === d; });
+                childGroups.select('rect')
+                    .transition()
+                    .duration(CONFIG.ANIMATION_DURATION / 2)
+                    .ease(CONFIG.EASING_FUNC)
+                    .attr('height', 0)
+                    .on('end', function () { d3.select(this.parentNode).classed('hidden', true); });
+                d.data.peeked = false;
+            }
+
+            function handleClick(event, d) {
+                const shouldExpand = !d.data.expanded;
+                groups.filter(function (desc) {
+                    return desc !== d && desc.ancestors().includes(d);
+                }).each(function (desc) { desc.data.peeked = false; });
+                d.data.expanded = shouldExpand;
+
+                if (shouldExpand) {
+                    const childGroups = groups.filter(function (child) { return child.parent === d; });
+                    childGroups.classed('hidden', false)
+                        .select('rect')
+                        .classed('peek-disabled', false)
+                        .transition()
+                        .duration(CONFIG.ANIMATION_DURATION)
+                        .ease(CONFIG.EASING_FUNC)
+                        .attr('height', barHeight);
+                    childGroups.select('text')
+                        .style('opacity', 0)
+                        .transition()
+                        .delay(CONFIG.ANIMATION_DURATION / 2)
+                        .duration(CONFIG.ANIMATION_DURATION)
+                        .ease(CONFIG.EASING_FUNC)
+                        .style('opacity', 1);
+                } else {
+                    const descendants = groups.filter(function (child) {
+                        return child !== d && child.ancestors().includes(d);
+                    });
+                    const openDepths = descendants.filter(function (child) {
+                        return child.data.expanded;
+                    }).data().map(function (child) { return child.depth; });
+                    const maxOpenDepth = openDepths.length ? Math.max.apply(null, openDepths) : d.depth;
+                    const totalLevels = maxOpenDepth - d.depth;
+
+                    descendants.each(function (child) {
+                        const grp = d3.select(this);
+                        const levelOffset = child.depth - d.depth;
+                        const delayTime = (totalLevels - levelOffset + 1) * CONFIG.ANIMATION_DURATION;
+
+                        grp.select('rect')
+                            .transition()
+                            .delay(delayTime)
+                            .duration(CONFIG.ANIMATION_DURATION)
+                            .ease(CONFIG.EASING_FUNC)
+                            .attr('height', 0);
+                        grp.select('text')
+                            .transition()
+                            .delay(delayTime)
+                            .duration(CONFIG.ANIMATION_DURATION)
+                            .ease(CONFIG.EASING_FUNC)
+                            .style('opacity', 0);
+                        grp.transition()
+                            .delay(delayTime + CONFIG.ANIMATION_DURATION)
+                            .ease(CONFIG.EASING_FUNC)
+                            .on('end', function () { grp.classed('hidden', true); });
+                        child.data.expanded = false;
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
