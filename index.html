@@ -10,35 +10,77 @@
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
+        :root {
+            /* Color Variables */
+            --color-background: #F9F4EC;
+            --color-text: #000000;
+            --color-border: #000000;
+            --color-shadow: rgba(0, 0, 0, 0.21);
+
+            /* Typography Variables */
+            --font-family: monospace;
+            --font-size-body: 12px;
+            --font-size-heading: 27px;
+            --font-size-label: 18px;
+            --font-size-button: var(--font-size-body);
+
+            /* Spacing Variables */
+            --spacing-body: 2rem;
+            --spacing-row-gap: 0;
+            --spacing-label-padding-x: 30px;
+            --spacing-label-padding-y: 20px;
+            --spacing-button-padding: 12px;
+            --spacing-tooltip-padding: 8px;
+
+            /* Border Variables */
+            --border-width: 1px;
+            --border-radius: 0;
+
+            /* Shadow Variables */
+            --shadow-tooltip: -1px 5px 13px 0px var(--color-shadow);
+
+            /* Animation Variables */
+            --animation-duration: 300ms;
+            --animation-easing: cubic-bezier(0.645, 0.045, 0.355, 1);
+        }
+
         body {
-            margin: 2rem;
-            background-color: #F9F4EC;
-            font-family: monospace;
+            margin: var(--spacing-body);
+            background-color: var(--color-background);
+            font-family: var(--font-family);
             text-transform: uppercase;
-            font-size: 12px;
+            font-size: var(--font-size-body);
+            color: var(--color-text);
+        }
+
+        h1 {
+            font-size: var(--font-size-heading);
+            margin-bottom: var(--spacing-button-padding);
+            font-family: var(--font-family);
+            text-transform: uppercase;
         }
 
         svg#icicleChart {
             display: block;
             width: 100%;
-            background: #F9F4EC;
+            background: var(--color-background);
             overflow: visible;
         }
 
         rect.node {
-            fill: #F9F4EC;
-            stroke: #000000;
-            stroke-width: 1px;
+            fill: var(--color-background);
+            stroke: var(--color-border);
+            stroke-width: var(--border-width);
             cursor: pointer;
             vector-effect: non-scaling-stroke;
         }
 
         text.label {
-            font-family: monospace;
-            fill: #000000;
+            font-family: var(--font-family);
+            fill: var(--color-text);
             pointer-events: none;
             text-transform: uppercase;
-            font-size: 18px !important;
+            font-size: var(--font-size-label) !important;
             dominant-baseline: hanging;
         }
 
@@ -59,14 +101,14 @@
         }
 
         .ui-tooltip.custom-tooltip {
-            background: #F9F4EC !important;
-            border: 1px solid #000000 !important;
-            padding: 8px !important;
-            color: #000000 !important;
-            box-shadow: -1px 5px 13px 0px rgba(0, 0, 0, 0.21);
+            background: var(--color-background) !important;
+            border: var(--border-width) solid var(--color-border) !important;
+            padding: var(--spacing-tooltip-padding) !important;
+            color: var(--color-text) !important;
+            box-shadow: var(--shadow-tooltip);
             text-transform: uppercase;
-            font-family: monospace;
-            border-radius: 0;
+            font-family: var(--font-family);
+            border-radius: var(--border-radius);
         }
 
         .custom-tooltip .ui-tooltip-content {
@@ -77,26 +119,20 @@
 
         #toggleAllButton {
             cursor: pointer;
-            padding: 12px 12px;
-            margin-bottom: 12px;
-            background-color: #F9F4EC;
-            border: 1px solid #000000;
-            font-family: monospace;
+            padding: var(--spacing-button-padding);
+            margin-bottom: var(--spacing-button-padding);
+            background-color: var(--color-background);
+            border: var(--border-width) solid var(--color-border);
+            font-family: var(--font-family);
             text-transform: uppercase;
             display: inline-block;
             border-bottom: none;
-            width: calc(100% - 2rem);
+            width: calc(100% - 1.5rem);
+            font-size: var(--font-size-button);
         }
 
         #toggleAllButton:hover {
             color: #2d2d2d;
-        }
-
-        h1 {
-            font-size: 27px;
-            margin-bottom: 12px;
-            font-family: monospace;
-            text-transform: uppercase;
         }
     </style>
 </head>
@@ -106,102 +142,54 @@
     <svg id="icicleChart"></svg>
 
     <script>
-        // Configuration
-        const GOOGLE_SHEETS_API_KEY = 'AIzaSyBKYfT1ajYbTj2sw0udmx55vRtaQg0tTy8';
-        const SPREADSHEET_ID = '16avBJTZsmEC5DBOuJi2o3_xcWQYfkadIFhCZdDvrcjU';
-        const HIERARCHY_RANGE = 'Sheet1!A1:D100';
-        const TOOLTIP_RANGE = 'Sheet1!E1:E100';
+        // =============================================
+        // CONFIGURATION CONSTANTS
+        // =============================================
         const CONFIG = {
+            // API Configuration
+            GOOGLE_SHEETS: {
+                API_KEY: 'AIzaSyBKYfT1ajYbTj2sw0udmx55vRtaQg0tTy8',
+                SPREADSHEET_ID: '16avBJTZsmEC5DBOuJi2o3_xcWQYfkadIFhCZdDvrcjU',
+                HIERARCHY_RANGE: 'Sheet1!A1:D100',
+                TOOLTIP_RANGE: 'Sheet1!E1:E100'
+            },
+
+            // Diagram Dimensions
             VIEWBOX_WIDTH: 2400,
-            ROW_GAP: 0,
-            LABEL_FONT_SIZE: 18,
-            LABEL_PADDING_X: 30,  // Horizontal padding
-            LABEL_PADDING_Y: 20,  // Vertical padding
-            ANIMATION_DURATION: 300,
+            ROW_GAP: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--spacing-row-gap')),
+
+            // Label Configuration
+            LABEL_FONT_SIZE: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--font-size-label')),
+            LABEL_PADDING_X: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--spacing-label-padding-x')),
+            LABEL_PADDING_Y: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--spacing-label-padding-y')),
+
+            // Animation Configuration
+            ANIMATION_DURATION: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--animation-duration')),
             PEEK_HEIGHT_RATIO: 0.2,
             EASING_FUNC: d3.easeCubicInOut
         };
 
-        // Global variables
+        // =============================================
+        // GLOBAL VARIABLES
+        // =============================================
         let rootData, groups, barHeight, svg, rootNode;
 
+        // =============================================
+        // INITIALIZATION
+        // =============================================
         $(function () {
             initializeTooltips();
             loadHierarchyData();
             document.getElementById('toggleAllButton').addEventListener('click', toggleAllNodes);
         });
 
-        function toggleAllNodes() {
-            const button = document.getElementById('toggleAllButton');
-            const shouldExpand = button.textContent === '/ All Ingredients { expand }';
-            button.textContent = shouldExpand ? '/ All Ingredients { collapse }' : '/ All Ingredients { expand }';
+        // =============================================
+        // TOOLTIP FUNCTIONS
+        // =============================================
 
-            function updateNodeState(node, state) {
-                node.expanded = state;
-                if (node.children) node.children.forEach(child => updateNodeState(child, state));
-            }
-            updateNodeState(rootData, shouldExpand);
-
-            const allNodes = groups.data().filter(node => node.depth > 0);
-            const maxDepth = d3.max(allNodes, node => node.depth);
-
-            if (shouldExpand) {
-                groups.filter(node => node.depth > 1)
-                    .classed('hidden', false)
-                    .select('rect')
-                    .classed('peek-disabled', false)
-                    .attr('height', 0);
-
-                for (let depth = 2; depth <= maxDepth; depth++) {
-                    const delayTime = (depth - 2) * CONFIG.ANIMATION_DURATION;
-
-                    groups.filter(node => node.depth === depth)
-                        .select('rect')
-                        .transition()
-                        .delay(delayTime)
-                        .duration(CONFIG.ANIMATION_DURATION)
-                        .ease(CONFIG.EASING_FUNC)
-                        .attr('height', barHeight);
-
-                    groups.filter(node => node.depth === depth)
-                        .select('text')
-                        .transition()
-                        .delay(delayTime + CONFIG.ANIMATION_DURATION / 2)
-                        .duration(CONFIG.ANIMATION_DURATION)
-                        .ease(CONFIG.EASING_FUNC)
-                        .style('opacity', 1);
-                }
-            } else {
-                for (let depth = maxDepth; depth >= 2; depth--) {
-                    const delayTime = (maxDepth - depth) * CONFIG.ANIMATION_DURATION;
-
-                    groups.filter(node => node.depth === depth)
-                        .select('rect')
-                        .transition()
-                        .delay(delayTime)
-                        .duration(CONFIG.ANIMATION_DURATION)
-                        .ease(CONFIG.EASING_FUNC)
-                        .attr('height', 0);
-
-                    groups.filter(node => node.depth === depth)
-                        .select('text')
-                        .transition()
-                        .delay(delayTime)
-                        .duration(CONFIG.ANIMATION_DURATION)
-                        .ease(CONFIG.EASING_FUNC)
-                        .style('opacity', 0);
-
-                    groups.filter(node => node.depth === depth)
-                        .transition()
-                        .delay(delayTime + CONFIG.ANIMATION_DURATION)
-                        .ease(CONFIG.EASING_FUNC)
-                        .on('end', function () {
-                            d3.select(this).classed('hidden', true);
-                        });
-                }
-            }
-        }
-
+        /**
+         * Initializes jQuery UI tooltips for node elements
+         */
         function initializeTooltips() {
             $(document).tooltip({
                 items: 'rect.node[data-tooltip!=""]',
@@ -213,200 +201,460 @@
             });
         }
 
+        // =============================================
+        // DATA LOADING FUNCTIONS
+        // =============================================
+
+        /**
+         * Loads hierarchy data from Google Sheets API
+         */
         function loadHierarchyData() {
-            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${HIERARCHY_RANGE}?key=${GOOGLE_SHEETS_API_KEY}`;
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.GOOGLE_SHEETS.SPREADSHEET_ID}/values/${CONFIG.GOOGLE_SHEETS.HIERARCHY_RANGE}?key=${CONFIG.GOOGLE_SHEETS.API_KEY}`;
+
             $.get(url)
-                .done(function (response) { fetchTooltipData(response.values); })
-                .fail(function (error) { console.error('Error loading hierarchy data:', error); });
+                .done(response => fetchTooltipData(response.values))
+                .fail(error => console.error('Error loading hierarchy data:', error));
         }
 
+        /**
+         * Fetches tooltip data and builds the hierarchy
+         * @param {Array} rows - The hierarchy data rows
+         */
         function fetchTooltipData(rows) {
-            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${TOOLTIP_RANGE}?key=${GOOGLE_SHEETS_API_KEY}`;
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.GOOGLE_SHEETS.SPREADSHEET_ID}/values/${CONFIG.GOOGLE_SHEETS.TOOLTIP_RANGE}?key=${CONFIG.GOOGLE_SHEETS.API_KEY}`;
+
             $.get(url)
-                .done(function (response) {
+                .done(response => {
                     rootData = buildNestedHierarchy(rows, response.values);
                     renderIcicleChart(rootData);
                 })
-                .fail(function (error) { console.error('Error loading tooltip data:', error); });
+                .fail(error => console.error('Error loading tooltip data:', error));
         }
 
+        /**
+         * Builds a nested hierarchy structure from flat data
+         * @param {Array} dataRows - The hierarchical data
+         * @param {Array} tooltipRows - The tooltip data
+         * @returns {Object} The root node of the hierarchy
+         */
         function buildNestedHierarchy(dataRows, tooltipRows) {
-            const root = { name: 'root', children: [], expanded: false, peeked: false, tooltip: '' };
+            const root = {
+                name: 'root',
+                children: [],
+                expanded: false,
+                peeked: false,
+                tooltip: ''
+            };
+
             for (let i = 1; i < dataRows.length; i++) {
                 const row = dataRows[i];
                 const tooltipText = (tooltipRows[i] && tooltipRows[i][0]) || '';
                 let parentNode = root;
-                row.forEach(function (cellValue, columnIndex) {
+
+                row.forEach((cellValue, columnIndex) => {
                     let childNode = findChildNodeByName(parentNode.children, cellValue);
+
                     if (!childNode) {
-                        childNode = { name: cellValue, children: [], expanded: false, peeked: false, tooltip: '' };
-                        if (columnIndex === row.length - 1) childNode.tooltip = tooltipText;
+                        childNode = {
+                            name: cellValue,
+                            children: [],
+                            expanded: false,
+                            peeked: false,
+                            tooltip: ''
+                        };
+
+                        if (columnIndex === row.length - 1) {
+                            childNode.tooltip = tooltipText;
+                        }
+
                         parentNode.children.push(childNode);
                     }
+
                     parentNode = childNode;
                 });
             }
+
             return root;
         }
 
+        /**
+         * Finds a child node by name in a node list
+         * @param {Array} nodeList - The list of nodes to search
+         * @param {String} name - The name to search for
+         * @returns {Object|null} The found node or null
+         */
         function findChildNodeByName(nodeList, name) {
-            for (let i = 0; i < nodeList.length; i++) {
-                if (nodeList[i].name === name) return nodeList[i];
-            }
-            return null;
+            return nodeList.find(node => node.name === name) || null;
         }
 
+        // =============================================
+        // DIAGRAM RENDERING FUNCTIONS
+        // =============================================
+
+        /**
+         * Renders the icicle chart using the hierarchy data
+         * @param {Object} rootData - The root node of the hierarchy
+         */
         function renderIcicleChart(rootData) {
-            rootNode = d3.hierarchy(rootData).sum(function (d) { return d.children.length === 0 ? 1 : 0; });
-            d3.partition().size([CONFIG.VIEWBOX_WIDTH, 1])(rootNode);
-            const nodes = rootNode.descendants().filter(function (node) { return node.depth > 0; });
+            // Process hierarchy data
+            rootNode = d3.hierarchy(rootData)
+                .sum(d => d.children.length === 0 ? 1 : 0);
 
-            const canvas = document.createElement('canvas');
-            const context2d = canvas.getContext('2d');
-            context2d.font = `${CONFIG.LABEL_FONT_SIZE}px monospace`;
+            d3.partition()
+                .size([CONFIG.VIEWBOX_WIDTH, 1])(rootNode);
 
-            // Calculate the maximum label width (rotated 90 degrees, so this becomes height)
-            const maxLabelWidth = d3.max(nodes, function (node) {
-                return context2d.measureText(' / ' + node.data.name + (node.depth < nodes[0].height ? ' { ' + node.value + ' } ' : '')).width;
-            });
+            const nodes = rootNode.descendants()
+                .filter(node => node.depth > 0);
 
-            // Set bar height based on the longest label plus padding
-            barHeight = maxLabelWidth + (2 * CONFIG.LABEL_PADDING_Y);
+            // Calculate bar height based on label width
+            barHeight = calculateBarHeight(nodes);
             const rowHeight = barHeight + CONFIG.ROW_GAP;
-            const maxDepth = d3.max(nodes, function (node) { return node.depth; });
-            const yOffsetMap = {};
-            for (let depth = 1; depth <= maxDepth; depth++) {
-                yOffsetMap[depth] = (depth - 1) * rowHeight + CONFIG.ROW_GAP;
-            }
+            const maxDepth = d3.max(nodes, node => node.depth);
+            const yOffsetMap = calculateYOffsets(maxDepth, rowHeight);
 
+            // Set up SVG container
             const totalHeight = yOffsetMap[maxDepth] + barHeight + CONFIG.ROW_GAP;
             svg = d3.select('#icicleChart')
                 .attr('viewBox', `0 0 ${CONFIG.VIEWBOX_WIDTH} ${totalHeight}`)
                 .attr('preserveAspectRatio', 'xMinYMin meet');
 
-            groups = svg.selectAll('g.node-group')
+            // Create node groups
+            groups = createNodeGroups(svg, nodes, yOffsetMap);
+
+            // Add rectangles for each node
+            addNodeRectangles(groups, barHeight);
+
+            // Add labels for each node
+            addNodeLabels(groups, maxDepth);
+        }
+
+        /**
+         * Calculates the required bar height based on label widths
+         * @param {Array} nodes - The array of nodes
+         * @returns {Number} The calculated bar height
+         */
+        function calculateBarHeight(nodes) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = `${CONFIG.LABEL_FONT_SIZE}px monospace`;
+
+            const maxLabelWidth = d3.max(nodes, node => {
+                return context.measureText(` / ${node.data.name}${node.depth < nodes[0].height ? ` { ${node.value} } ` : ''}`).width;
+            });
+
+            return maxLabelWidth + (2 * CONFIG.LABEL_PADDING_Y);
+        }
+
+        /**
+         * Calculates Y offsets for each depth level
+         * @param {Number} maxDepth - The maximum depth of the hierarchy
+         * @param {Number} rowHeight - The height of each row
+         * @returns {Object} Mapping of depth to Y offset
+         */
+        function calculateYOffsets(maxDepth, rowHeight) {
+            const yOffsetMap = {};
+            for (let depth = 1; depth <= maxDepth; depth++) {
+                yOffsetMap[depth] = (depth - 1) * rowHeight + CONFIG.ROW_GAP;
+            }
+            return yOffsetMap;
+        }
+
+        /**
+         * Creates SVG groups for each node
+         * @param {Object} svg - The SVG container
+         * @param {Array} nodes - The array of nodes
+         * @param {Object} yOffsetMap - Mapping of depth to Y offset
+         * @returns {Object} The D3 selection of node groups
+         */
+        function createNodeGroups(svg, nodes, yOffsetMap) {
+            return svg.selectAll('g.node-group')
                 .data(nodes)
                 .enter()
                 .append('g')
                 .attr('class', 'node-group')
-                .attr('transform', function (d) { return `translate(${d.x0},${yOffsetMap[d.depth]})`; })
-                .classed('hidden', function (d) { return d.depth !== 1; });
+                .attr('transform', d => `translate(${d.x0},${yOffsetMap[d.depth]})`)
+                .classed('hidden', d => d.depth !== 1);
+        }
 
+        /**
+         * Adds rectangles to node groups
+         * @param {Object} groups - The D3 selection of node groups
+         * @param {Number} barHeight - The height of each bar
+         */
+        function addNodeRectangles(groups, barHeight) {
             groups.append('rect')
                 .attr('class', 'node')
-                .attr('width', function (d) { return d.x1 - d.x0; })
+                .attr('width', d => d.x1 - d.x0)
                 .attr('height', barHeight)
-                .attr('data-tooltip', function (d) { return d.data.tooltip || ''; })
+                .attr('data-tooltip', d => d.data.tooltip || '')
                 .on('mouseover', handleMouseOver)
                 .on('mouseout', handleMouseOut)
                 .on('click', handleClick);
+        }
 
+        /**
+         * Adds labels to node groups
+         * @param {Object} groups - The D3 selection of node groups
+         * @param {Number} maxDepth - The maximum depth of the hierarchy
+         */
+        function addNodeLabels(groups, maxDepth) {
             groups.append('text')
                 .attr('class', 'label')
-                .attr('transform', function (d) {
-                    // Position text with padding from top-left corner
-                    return `translate(${CONFIG.LABEL_PADDING_X},${CONFIG.LABEL_PADDING_Y}) rotate(90)`;
-                })
-                .style('opacity', function (d) { return d.depth === 1 ? 1 : 0; })
+                .attr('transform', d => `translate(${CONFIG.LABEL_PADDING_X},${CONFIG.LABEL_PADDING_Y}) rotate(90)`)
+                .style('opacity', d => d.depth === 1 ? 1 : 0)
                 .style('font-size', `${CONFIG.LABEL_FONT_SIZE}px`)
                 .each(function (d) {
                     const textEl = d3.select(this);
                     textEl.append('tspan')
                         .attr('class', 'label-main')
-                        .text(' / ' + d.data.name);
+                        .text(` / ${d.data.name}`);
+
                     if (d.depth < maxDepth) {
                         textEl.append('tspan')
                             .attr('class', 'label-value')
-                            .text(' { ' + d.value + ' } ');
+                            .text(` { ${d.value} } `);
                     }
                 });
+        }
 
-            function handleMouseOver(event, d) {
-                if (d.data.expanded || d.data.peeked) return;
-                const childGroups = groups.filter(function (child) {
-                    return child.parent === d && d3.select(this).classed('hidden');
+        // =============================================
+        // INTERACTION HANDLERS
+        // =============================================
+
+        /**
+         * Handles mouseover events on nodes
+         * @param {Event} event - The mouse event
+         * @param {Object} d - The node data
+         */
+        function handleMouseOver(event, d) {
+            if (d.data.expanded || d.data.peeked) return;
+
+            const childGroups = groups.filter(child =>
+                child.parent === d && d3.select(this).classed('hidden')
+            );
+
+            if (childGroups.empty()) return;
+
+            d.data.peeked = true;
+            childGroups.classed('hidden', false)
+                .select('rect')
+                .classed('peek-disabled', true)
+                .attr('height', 0)
+                .transition()
+                .duration(CONFIG.ANIMATION_DURATION / 2)
+                .ease(CONFIG.EASING_FUNC)
+                .attr('height', barHeight * CONFIG.PEEK_HEIGHT_RATIO);
+        }
+
+        /**
+         * Handles mouseout events on nodes
+         * @param {Event} event - The mouse event
+         * @param {Object} d - The node data
+         */
+        function handleMouseOut(event, d) {
+            if (d.data.expanded || !d.data.peeked) return;
+
+            const childGroups = groups.filter(child => child.parent === d);
+            childGroups.select('rect')
+                .transition()
+                .duration(CONFIG.ANIMATION_DURATION / 2)
+                .ease(CONFIG.EASING_FUNC)
+                .attr('height', 0)
+                .on('end', function () {
+                    d3.select(this.parentNode).classed('hidden', true);
                 });
-                if (childGroups.empty()) return;
-                d.data.peeked = true;
-                childGroups.classed('hidden', false)
+
+            d.data.peeked = false;
+        }
+
+        /**
+         * Handles click events on nodes
+         * @param {Event} event - The click event
+         * @param {Object} d - The node data
+         */
+        function handleClick(event, d) {
+            const shouldExpand = !d.data.expanded;
+
+            // Reset peek state for descendants
+            groups.filter(desc =>
+                desc !== d && desc.ancestors().includes(d)
+            ).each(desc => { desc.data.peeked = false; });
+
+            d.data.expanded = shouldExpand;
+
+            if (shouldExpand) {
+                expandNode(d);
+            } else {
+                collapseNode(d);
+            }
+        }
+
+        /**
+         * Expands a node to show its children
+         * @param {Object} d - The node data to expand
+         */
+        function expandNode(d) {
+            const childGroups = groups.filter(child => child.parent === d);
+
+            childGroups.classed('hidden', false)
+                .select('rect')
+                .classed('peek-disabled', false)
+                .transition()
+                .duration(CONFIG.ANIMATION_DURATION)
+                .ease(CONFIG.EASING_FUNC)
+                .attr('height', barHeight);
+
+            childGroups.select('text')
+                .style('opacity', 0)
+                .transition()
+                .delay(CONFIG.ANIMATION_DURATION / 2)
+                .duration(CONFIG.ANIMATION_DURATION)
+                .ease(CONFIG.EASING_FUNC)
+                .style('opacity', 1);
+        }
+
+        /**
+         * Collapses a node to hide its children
+         * @param {Object} d - The node data to collapse
+         */
+        function collapseNode(d) {
+            const descendants = groups.filter(child =>
+                child !== d && child.ancestors().includes(d)
+            );
+
+            const openDepths = descendants.filter(child =>
+                child.data.expanded
+            ).data().map(child => child.depth);
+
+            const maxOpenDepth = openDepths.length ? Math.max(...openDepths) : d.depth;
+            const totalLevels = maxOpenDepth - d.depth;
+
+            descendants.each(function (child) {
+                const grp = d3.select(this);
+                const levelOffset = child.depth - d.depth;
+                const delayTime = (totalLevels - levelOffset + 1) * CONFIG.ANIMATION_DURATION;
+
+                grp.select('rect')
+                    .transition()
+                    .delay(delayTime)
+                    .duration(CONFIG.ANIMATION_DURATION)
+                    .ease(CONFIG.EASING_FUNC)
+                    .attr('height', 0);
+
+                grp.select('text')
+                    .transition()
+                    .delay(delayTime)
+                    .duration(CONFIG.ANIMATION_DURATION)
+                    .ease(CONFIG.EASING_FUNC)
+                    .style('opacity', 0);
+
+                grp.transition()
+                    .delay(delayTime + CONFIG.ANIMATION_DURATION)
+                    .ease(CONFIG.EASING_FUNC)
+                    .on('end', () => grp.classed('hidden', true));
+
+                child.data.expanded = false;
+            });
+        }
+
+        // =============================================
+        // GLOBAL CONTROLS
+        // =============================================
+
+        /**
+         * Toggles all nodes between expanded and collapsed states
+         */
+        function toggleAllNodes() {
+            const button = document.getElementById('toggleAllButton');
+            const shouldExpand = button.textContent === '/ All Ingredients { expand }';
+            button.textContent = shouldExpand
+                ? '/ All Ingredients { collapse }'
+                : '/ All Ingredients { expand }';
+
+            /**
+             * Recursively updates node expansion state
+             * @param {Object} node - The current node
+             * @param {Boolean} state - The expansion state to set
+             */
+            function updateNodeState(node, state) {
+                node.expanded = state;
+                if (node.children) node.children.forEach(child => updateNodeState(child, state));
+            }
+
+            updateNodeState(rootData, shouldExpand);
+            const allNodes = groups.data().filter(node => node.depth > 0);
+            const maxDepth = d3.max(allNodes, node => node.depth);
+
+            if (shouldExpand) {
+                expandAllNodes(maxDepth);
+            } else {
+                collapseAllNodes(maxDepth);
+            }
+        }
+
+        /**
+         * Expands all nodes in the hierarchy
+         * @param {Number} maxDepth - The maximum depth of the hierarchy
+         */
+        function expandAllNodes(maxDepth) {
+            groups.filter(node => node.depth > 1)
+                .classed('hidden', false)
+                .select('rect')
+                .classed('peek-disabled', false)
+                .attr('height', 0);
+
+            for (let depth = 2; depth <= maxDepth; depth++) {
+                const delayTime = (depth - 2) * CONFIG.ANIMATION_DURATION;
+
+                groups.filter(node => node.depth === depth)
                     .select('rect')
-                    .classed('peek-disabled', true)
-                    .attr('height', 0)
                     .transition()
-                    .duration(CONFIG.ANIMATION_DURATION / 2)
+                    .delay(delayTime)
+                    .duration(CONFIG.ANIMATION_DURATION)
                     .ease(CONFIG.EASING_FUNC)
-                    .attr('height', barHeight * CONFIG.PEEK_HEIGHT_RATIO);
-            }
+                    .attr('height', barHeight);
 
-            function handleMouseOut(event, d) {
-                if (d.data.expanded || !d.data.peeked) return;
-                const childGroups = groups.filter(function (child) { return child.parent === d; });
-                childGroups.select('rect')
+                groups.filter(node => node.depth === depth)
+                    .select('text')
                     .transition()
-                    .duration(CONFIG.ANIMATION_DURATION / 2)
+                    .delay(delayTime + CONFIG.ANIMATION_DURATION / 2)
+                    .duration(CONFIG.ANIMATION_DURATION)
                     .ease(CONFIG.EASING_FUNC)
-                    .attr('height', 0)
-                    .on('end', function () { d3.select(this.parentNode).classed('hidden', true); });
-                d.data.peeked = false;
+                    .style('opacity', 1);
             }
+        }
 
-            function handleClick(event, d) {
-                const shouldExpand = !d.data.expanded;
-                groups.filter(function (desc) {
-                    return desc !== d && desc.ancestors().includes(d);
-                }).each(function (desc) { desc.data.peeked = false; });
-                d.data.expanded = shouldExpand;
+        /**
+         * Collapses all nodes in the hierarchy
+         * @param {Number} maxDepth - The maximum depth of the hierarchy
+         */
+        function collapseAllNodes(maxDepth) {
+            for (let depth = maxDepth; depth >= 2; depth--) {
+                const delayTime = (maxDepth - depth) * CONFIG.ANIMATION_DURATION;
 
-                if (shouldExpand) {
-                    const childGroups = groups.filter(function (child) { return child.parent === d; });
-                    childGroups.classed('hidden', false)
-                        .select('rect')
-                        .classed('peek-disabled', false)
-                        .transition()
-                        .duration(CONFIG.ANIMATION_DURATION)
-                        .ease(CONFIG.EASING_FUNC)
-                        .attr('height', barHeight);
-                    childGroups.select('text')
-                        .style('opacity', 0)
-                        .transition()
-                        .delay(CONFIG.ANIMATION_DURATION / 2)
-                        .duration(CONFIG.ANIMATION_DURATION)
-                        .ease(CONFIG.EASING_FUNC)
-                        .style('opacity', 1);
-                } else {
-                    const descendants = groups.filter(function (child) {
-                        return child !== d && child.ancestors().includes(d);
+                groups.filter(node => node.depth === depth)
+                    .select('rect')
+                    .transition()
+                    .delay(delayTime)
+                    .duration(CONFIG.ANIMATION_DURATION)
+                    .ease(CONFIG.EASING_FUNC)
+                    .attr('height', 0);
+
+                groups.filter(node => node.depth === depth)
+                    .select('text')
+                    .transition()
+                    .delay(delayTime)
+                    .duration(CONFIG.ANIMATION_DURATION)
+                    .ease(CONFIG.EASING_FUNC)
+                    .style('opacity', 0);
+
+                groups.filter(node => node.depth === depth)
+                    .transition()
+                    .delay(delayTime + CONFIG.ANIMATION_DURATION)
+                    .ease(CONFIG.EASING_FUNC)
+                    .on('end', function () {
+                        d3.select(this).classed('hidden', true);
                     });
-                    const openDepths = descendants.filter(function (child) {
-                        return child.data.expanded;
-                    }).data().map(function (child) { return child.depth; });
-                    const maxOpenDepth = openDepths.length ? Math.max.apply(null, openDepths) : d.depth;
-                    const totalLevels = maxOpenDepth - d.depth;
-
-                    descendants.each(function (child) {
-                        const grp = d3.select(this);
-                        const levelOffset = child.depth - d.depth;
-                        const delayTime = (totalLevels - levelOffset + 1) * CONFIG.ANIMATION_DURATION;
-
-                        grp.select('rect')
-                            .transition()
-                            .delay(delayTime)
-                            .duration(CONFIG.ANIMATION_DURATION)
-                            .ease(CONFIG.EASING_FUNC)
-                            .attr('height', 0);
-                        grp.select('text')
-                            .transition()
-                            .delay(delayTime)
-                            .duration(CONFIG.ANIMATION_DURATION)
-                            .ease(CONFIG.EASING_FUNC)
-                            .style('opacity', 0);
-                        grp.transition()
-                            .delay(delayTime + CONFIG.ANIMATION_DURATION)
-                            .ease(CONFIG.EASING_FUNC)
-                            .on('end', function () { grp.classed('hidden', true); });
-                        child.data.expanded = false;
-                    });
-                }
             }
         }
     </script>
