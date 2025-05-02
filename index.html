@@ -22,6 +22,7 @@
             display: block;
             width: 100%;
             background: #F9F4EC;
+            overflow: visible;
         }
 
         rect.node {
@@ -29,6 +30,7 @@
             stroke: #000000;
             stroke-width: 1px;
             cursor: pointer;
+            vector-effect: non-scaling-stroke;
         }
 
         text.label {
@@ -36,6 +38,16 @@
             fill: #000000;
             pointer-events: none;
             text-transform: uppercase;
+            font-size: 18px !important;
+            dominant-baseline: hanging;
+        }
+
+        tspan.label-main {
+            padding-left: 10px;
+        }
+
+        tspan.label-value {
+            padding-left: 5px;
         }
 
         .hidden {
@@ -64,9 +76,8 @@
         }
 
         #toggleAllButton {
-
             cursor: pointer;
-            padding: 8px 16px;
+            padding: 12px 12px;
             margin-bottom: 12px;
             background-color: #F9F4EC;
             border: 1px solid #000000;
@@ -83,7 +94,6 @@
 
         h1 {
             font-size: 27px;
-            /* 1.5 * 18px */
             margin-bottom: 12px;
             font-family: monospace;
             text-transform: uppercase;
@@ -92,7 +102,7 @@
 </head>
 
 <body>
-    <div id="toggleAllButton">/ All Ingredeients { expand }</div>
+    <div id="toggleAllButton">/ All Ingredients { expand }</div>
     <svg id="icicleChart"></svg>
 
     <script>
@@ -105,6 +115,8 @@
             VIEWBOX_WIDTH: 2400,
             ROW_GAP: 0,
             LABEL_FONT_SIZE: 18,
+            LABEL_PADDING_X: 30,  // Horizontal padding
+            LABEL_PADDING_Y: 20,  // Vertical padding
             ANIMATION_DURATION: 300,
             PEEK_HEIGHT_RATIO: 0.2,
             EASING_FUNC: d3.easeCubicInOut
@@ -121,8 +133,8 @@
 
         function toggleAllNodes() {
             const button = document.getElementById('toggleAllButton');
-            const shouldExpand = button.textContent === '/ All Ingredeients { expand }';
-            button.textContent = shouldExpand ? '/ All Ingredeients { collapse }' : '/ All Ingredeients { expand }';
+            const shouldExpand = button.textContent === '/ All Ingredients { expand }';
+            button.textContent = shouldExpand ? '/ All Ingredients { collapse }' : '/ All Ingredients { expand }';
 
             function updateNodeState(node, state) {
                 node.expanded = state;
@@ -252,11 +264,14 @@
             const canvas = document.createElement('canvas');
             const context2d = canvas.getContext('2d');
             context2d.font = `${CONFIG.LABEL_FONT_SIZE}px monospace`;
-            const maxTextWidth = d3.max(nodes, function (node) {
-                return context2d.measureText(node.data.name + ' ' + node.value).width;
+
+            // Calculate the maximum label width (rotated 90 degrees, so this becomes height)
+            const maxLabelWidth = d3.max(nodes, function (node) {
+                return context2d.measureText(' / ' + node.data.name + (node.depth < nodes[0].height ? ' { ' + node.value + ' } ' : '')).width;
             });
 
-            barHeight = maxTextWidth + 2 * CONFIG.LABEL_FONT_SIZE;
+            // Set bar height based on the longest label plus padding
+            barHeight = maxLabelWidth + (2 * CONFIG.LABEL_PADDING_Y);
             const rowHeight = barHeight + CONFIG.ROW_GAP;
             const maxDepth = d3.max(nodes, function (node) { return node.depth; });
             const yOffsetMap = {};
@@ -288,12 +303,22 @@
 
             groups.append('text')
                 .attr('class', 'label')
-                .attr('transform', `translate(${CONFIG.LABEL_FONT_SIZE},${CONFIG.LABEL_FONT_SIZE}) rotate(90)`)
+                .attr('transform', function (d) {
+                    // Position text with padding from top-left corner
+                    return `translate(${CONFIG.LABEL_PADDING_X},${CONFIG.LABEL_PADDING_Y}) rotate(90)`;
+                })
                 .style('opacity', function (d) { return d.depth === 1 ? 1 : 0; })
+                .style('font-size', `${CONFIG.LABEL_FONT_SIZE}px`)
                 .each(function (d) {
                     const textEl = d3.select(this);
-                    textEl.append('tspan').text(' / ' + d.data.name);
-                    if (d.depth < maxDepth) textEl.append('tspan').attr('fill-opacity', 1).text(' ' + ' { ' + d.value + ' } ');
+                    textEl.append('tspan')
+                        .attr('class', 'label-main')
+                        .text(' / ' + d.data.name);
+                    if (d.depth < maxDepth) {
+                        textEl.append('tspan')
+                            .attr('class', 'label-value')
+                            .text(' { ' + d.value + ' } ');
+                    }
                 });
 
             function handleMouseOver(event, d) {
